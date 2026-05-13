@@ -63,23 +63,23 @@
         </div>
 
         <!-- Progress Bar -->
-        @if(in_array($newsletter->process_status, ['started','completed']))
+        @if(in_array($newsletter->process_status, ['started','completed','start']))
         <div class="mt-4">
             <div class="d-flex justify-content-between align-items-center mb-1">
                 <span style="font-size:13px;font-weight:600;color:#374151">Email Dispatch Progress</span>
-                <span style="font-size:13px;color:#6366f1;font-weight:600">
+                <span id="progress-label" style="font-size:13px;color:#6366f1;font-weight:600">
                     {{ $newsletter->sent_count }} / {{ $newsletter->total_recipients }} sent
                     ({{ $newsletter->progress_percentage }}%)
                 </span>
             </div>
             <div class="progress" style="height:10px">
-                <div class="progress-bar" style="width:{{ $newsletter->progress_percentage }}%"
+                <div id="progress-bar" class="progress-bar" style="width:{{ $newsletter->progress_percentage }}%"
                      role="progressbar"></div>
             </div>
             <div class="d-flex gap-4 mt-2" style="font-size:12px;color:#6b7280">
-                <span><i class="bi bi-check-circle-fill text-success me-1"></i>Sent: {{ $newsletter->sent_count }}</span>
-                <span><i class="bi bi-hourglass-split text-warning me-1"></i>Pending: {{ $newsletter->total_recipients - $newsletter->sent_count }}</span>
-                <span><i class="bi bi-people text-primary me-1"></i>Total: {{ $newsletter->total_recipients }}</span>
+                <span><i class="bi bi-check-circle-fill text-success me-1"></i>Sent: <span id="progress-sent">{{ $newsletter->sent_count }}</span></span>
+                <span><i class="bi bi-hourglass-split text-warning me-1"></i>Pending: <span id="progress-pending">{{ max(0, $newsletter->total_recipients - $newsletter->sent_count) }}</span></span>
+                <span><i class="bi bi-people text-primary me-1"></i>Total: <span id="progress-total">{{ $newsletter->total_recipients }}</span></span>
             </div>
         </div>
         @endif
@@ -151,9 +151,11 @@
                     </tbody>
                 </table>
             </div>
+            @if($recipients->hasPages())
             <div class="d-flex justify-content-center py-3">
                 {{ $recipients->links() }}
             </div>
+            @endif
             @else
             <div class="text-center py-5">
                 <div style="font-size:40px;opacity:.2"><i class="bi bi-people"></i></div>
@@ -169,11 +171,41 @@
 @section('scripts')
 <style>
 @keyframes spin { to { transform: rotate(360deg); } }
+.spin { display: inline-block; animation: spin 1.5s linear infinite; }
 </style>
 @if(in_array($newsletter->process_status, ['started','start']))
 <script>
-    // Auto-refresh every 30 seconds while newsletter is sending
-    setTimeout(() => location.reload(), 30000);
+(function () {
+    const progressUrl = "{{ route('newsletters.progress', $newsletter) }}";
+    const bar         = document.getElementById('progress-bar');
+    const label       = document.getElementById('progress-label');
+    const sentSpan    = document.getElementById('progress-sent');
+    const pendingSpan = document.getElementById('progress-pending');
+    const totalSpan   = document.getElementById('progress-total');
+
+    function poll() {
+        fetch(progressUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.json())
+            .then(data => {
+                if (bar)         bar.style.width = data.progress_pct + '%';
+                if (label)       label.textContent = data.sent_count + ' / ' + data.total_recipients + ' sent (' + data.progress_pct + '%)';
+                if (sentSpan)    sentSpan.textContent = data.sent_count;
+                if (pendingSpan) pendingSpan.textContent = data.pending_count;
+                if (totalSpan)   totalSpan.textContent = data.total_recipients;
+
+                // Reload page when completed/status changes (to refresh recipient table)
+                if (data.process_status === 'completed') {
+                    location.reload();
+                    return;
+                }
+                setTimeout(poll, 8000);
+            })
+            .catch(() => setTimeout(poll, 15000));
+    }
+
+    // Start polling after 5 s to give the first job a moment to fire
+    setTimeout(poll, 5000);
+})();
 </script>
 @endif
 @endsection

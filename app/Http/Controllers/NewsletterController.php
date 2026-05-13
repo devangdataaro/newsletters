@@ -69,16 +69,21 @@ class NewsletterController extends Controller
             'scheduled_at'       => 'nullable|date',
         ]);
 
-        // Handle status change to "start"
+        // Handle status change to "start" — atomic to prevent double-dispatch
         if ($request->input('process_status') === 'start' && $newsletter->process_status === 'pending') {
-            $newsletter->update([
-                'newsletter_title'   => $validated['newsletter_title'],
-                'newsletter_content' => $validated['newsletter_content'],
-                'scheduled_at'       => $validated['scheduled_at'] ?? $newsletter->scheduled_at,
-                'process_status'     => 'start',
-            ]);
+            $updated = Newsletter::where('id', $newsletter->id)
+                ->where('process_status', 'pending')
+                ->update([
+                    'newsletter_title'   => $validated['newsletter_title'],
+                    'newsletter_content' => $validated['newsletter_content'],
+                    'scheduled_at'       => $validated['scheduled_at'] ?? $newsletter->scheduled_at,
+                    'process_status'     => 'start',
+                ]);
 
-            $this->dispatchNewsletter($newsletter);
+            if ($updated) {
+                $newsletter->refresh();
+                $this->dispatchNewsletter($newsletter);
+            }
 
             return redirect()->route('newsletters.index')
                 ->with('success', 'Newsletter is now being dispatched to all users!');
@@ -111,11 +116,17 @@ class NewsletterController extends Controller
             'process_status' => 'required|in:start',
         ]);
 
-        if ($newsletter->process_status !== 'pending') {
+        // Atomic update: only succeeds if the newsletter is still "pending".
+        // Prevents double-dispatch if the button is clicked twice quickly.
+        $updated = Newsletter::where('id', $newsletter->id)
+            ->where('process_status', 'pending')
+            ->update(['process_status' => 'start']);
+
+        if (! $updated) {
             return back()->with('error', 'Only pending newsletters can be started.');
         }
 
-        $newsletter->update(['process_status' => 'start']);
+        $newsletter->refresh();
         $this->dispatchNewsletter($newsletter);
 
         return back()->with('success', 'Newsletter sending has been initiated!');
@@ -128,5 +139,20 @@ class NewsletterController extends Controller
             : now();
 
         SendNewsletterJob::dispatch($newsletter->id, 0)->delay($delay);
+    }
+
+    /**
+     * Return live progress data as JSON for AJAX polling.
+     */
+    public function progress(Newsletter $newsletter)
+    {
+        $newsletter->refresh();
+        return response()->json([
+            'process_status'   => $newsletter->process_status,
+            'total_recipients' => $newsletter->total_recipients,
+            'sent_count'       => $newsletter->sent_count,
+            'progress_pct'     => $newsletter->progress_percentage,
+            'pending_count'    => max(0, $newsletter->total_recipients - $newsletter->sent_count),
+        ]);
     }
 }
