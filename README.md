@@ -1,58 +1,237 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Newsletter Application
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A Laravel-based bulk newsletter sending application with queue-driven email dispatch, real-time progress tracking, and scheduled delivery support.
 
-## About Laravel
+## Features
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- Create, edit, and delete newsletters
+- Bulk email sending to all registered users via Laravel Queues
+- Real-time sending progress tracking (sent count / total recipients)
+- Scheduled delivery support (`scheduled_at`)
+- Status lifecycle: `pending` → `start` → `started` → `completed`
+- Per-recipient delivery tracking (`newsletter_recipients` table)
+- Atomic dispatch to prevent duplicate sends
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+---
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Requirements
 
-## Learning Laravel
+| Requirement | Version  |
+|-------------|----------|
+| PHP         | >= 8.3   |
+| Laravel     | ^13.7    |
+| Composer    | >= 2.x   |
+| Node.js     | >= 18.x  |
+| npm         | >= 9.x   |
+| Database    | MySQL / PostgreSQL / SQLite |
+| Queue driver| `database` (default) or Redis |
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+---
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Project Setup — Step by Step
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+### Step 1 — Clone the Repository
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+git clone https://github.com/devangdataaro/newsletters.git
+cd newsletters
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+---
 
-## Contributing
+### Step 2 — Install PHP Dependencies
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+composer install
+```
 
-## Code of Conduct
+---
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### Step 3 — Create the Environment File
 
-## Security Vulnerabilities
+```bash
+cp .env.example .env
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+---
+
+### Step 4 — Generate the Application Key
+
+```bash
+php artisan key:generate
+```
+
+---
+
+### Step 5 — Configure the Database
+
+Open `.env` and set your database credentials:
+
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=newsletters
+DB_USERNAME=root
+DB_PASSWORD=your_password
+```
+
+> For SQLite, set `DB_CONNECTION=sqlite` and create the file: `touch database/database.sqlite`
+
+---
+
+### Step 6 — Configure the Mail Driver
+
+In `.env`, set your mail provider. Example for SMTP:
+
+```env
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.mailtrap.io
+MAIL_PORT=2525
+MAIL_USERNAME=your_username
+MAIL_PASSWORD=your_password
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=no-reply@example.com
+MAIL_FROM_NAME="Newsletter App"
+```
+
+> To test locally without sending real emails, use `MAIL_MAILER=log` (emails are written to `storage/logs/laravel.log`).
+
+---
+
+### Step 7 — Configure the Queue Driver
+
+In `.env`, set:
+
+```env
+QUEUE_CONNECTION=database
+```
+
+---
+
+### Step 8 — Run Database Migrations
+
+```bash
+php artisan migrate
+```
+
+This creates the following tables:
+- `users`
+- `newsletters`
+- `newsletter_recipients`
+- `jobs` (queue table)
+- `cache`
+
+---
+
+### Step 9 — Seed the Database (Optional)
+
+Seed sample users to have recipients available for testing:
+
+```bash
+php artisan db:seed --class=UserSeeder
+```
+
+---
+
+### Step 10 — Install Frontend Dependencies
+
+```bash
+npm install
+```
+
+---
+
+### Step 11 — Build Frontend Assets
+
+For development (with hot reload):
+
+```bash
+npm run dev
+```
+
+For production:
+
+```bash
+npm run build
+```
+
+---
+
+### Step 12 — Start the Application
+
+In separate terminal windows, run:
+
+**Web server:**
+```bash
+php artisan serve
+```
+
+**Queue worker** (required for sending emails):
+```bash
+php artisan queue:work
+```
+
+The application will be available at: `http://127.0.0.1:8000`
+
+---
+
+### Quick Setup (All in One)
+
+Alternatively, run the built-in setup script:
+
+```bash
+composer run setup
+```
+
+Then start everything together:
+
+```bash
+composer run dev
+```
+
+---
+
+## Application Routes
+
+| Method | URL                               | Description                        |
+|--------|-----------------------------------|------------------------------------|
+| GET    | `/`                               | Redirects to newsletter list       |
+| GET    | `/newsletters`                    | List all newsletters               |
+| GET    | `/newsletters/create`             | Create newsletter form             |
+| POST   | `/newsletters`                    | Store new newsletter               |
+| GET    | `/newsletters/{id}`               | View newsletter details            |
+| GET    | `/newsletters/{id}/edit`          | Edit newsletter form               |
+| PUT    | `/newsletters/{id}`               | Update newsletter                  |
+| DELETE | `/newsletters/{id}`               | Delete newsletter                  |
+| POST   | `/newsletters/{id}/start`         | Start sending the newsletter       |
+| GET    | `/newsletters/{id}/progress`      | Get sending progress (JSON)        |
+
+---
+
+## Newsletter Status Lifecycle
+
+```
+pending  →  start  →  started  →  completed
+```
+
+| Status      | Description                                      |
+|-------------|--------------------------------------------------|
+| `pending`   | Created, not yet dispatched                      |
+| `start`     | Dispatch triggered by the user                   |
+| `started`   | Queue worker is actively sending emails          |
+| `completed` | All recipients have been processed               |
+
+---
+
+## Running Tests
+
+```bash
+php artisan test
+```
+
+---
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+This project is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
